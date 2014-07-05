@@ -22,6 +22,8 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
+
+import org.junit.After;
 import org.junit.Test;
 
 import org.apache.cassandra.SchemaLoader;
@@ -45,6 +47,14 @@ public class AntiCompactionTest extends SchemaLoader
 {
     private static final String KEYSPACE1 = "Keyspace1";
     private static final String CF = "Standard1";
+
+    @After
+    public void truncateCF()
+    {
+        Keyspace keyspace = Keyspace.open(KEYSPACE1);
+        ColumnFamilyStore store = keyspace.getColumnFamilyStore(CF);
+        store.truncateBlocking();
+    }
 
     @Test
     public void antiCompactOne() throws InterruptedException, ExecutionException, IOException
