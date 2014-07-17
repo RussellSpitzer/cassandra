@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.cassandra.utils.Pair;
 
 public final class OptionEnumProbabilities<T> extends OptionMulti
 {

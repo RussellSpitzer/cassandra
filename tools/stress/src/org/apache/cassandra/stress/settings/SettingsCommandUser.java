@@ -60,10 +60,9 @@ public class SettingsCommandUser extends SettingsCommand
     public OpDistributionFactory getFactory(final StressSettings settings)
     {
         final List<Pair<String,Double>> mathPairs = new java.util.ArrayList<>();
-        for (java.util.Map.Entry pair: ratios.entrySet())
-        {
-            mathPairs.add(new Pair(pair.getKey(),pair.getValue()));
-        }
+        for (java.util.Map.Entry entry: ratios.entrySet())
+            mathPairs.add(new Pair(entry.getKey(), entry.getValue()));
+
         return new SampledOpDistributionFactory<String>(mathPairs, clustering)
         {
             protected Operation get(Timer timer, PartitionGenerator generator, String key)
