@@ -52,6 +52,8 @@ public class SettingsCommandUser extends SettingsCommand
         clustering = options.clustering.get();
         ratios = options.ops.ratios();
         profile = StressProfile.load(new File(options.profile.value()));
+        if (options.seed.value() != null)
+            profile.setSeedStr(options.seed.value());
 
         if (ratios.size() == 0)
             throw new IllegalArgumentException("Must specify at least one command with a non-zero ratio");
@@ -89,6 +91,7 @@ public class SettingsCommandUser extends SettingsCommand
         final OptionDistribution clustering = new OptionDistribution("clustering=", "GAUSSIAN(1..10)", "Distribution clustering runs of operations of the same kind");
         final OptionSimple profile = new OptionSimple("profile=", ".*", null, "Specify the path to a yaml cql3 profile", false);
         final OptionAnyProbabilities ops = new OptionAnyProbabilities("ops", "Specify the ratios for inserts/queries to perform; e.g. ops(insert=2,<query1>=1) will perform 2 inserts for each query1");
+        final OptionSimple seed = new OptionSimple("seed=", ".*", null, "Specify a seed to use for generated values", false);
 
         @Override
         public List<? extends Option> options()
@@ -97,6 +100,7 @@ public class SettingsCommandUser extends SettingsCommand
             options.add(clustering);
             options.add(ops);
             options.add(profile);
+            options.add(seed);
             options.addAll(parent.options());
             return options;
         }

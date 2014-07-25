@@ -158,6 +158,11 @@ public class StressProfile implements Serializable
         }
     }
 
+    public void setSeedStr(String newSeed)
+    {
+        this.seedStr=newSeed;
+    }
+
     public void maybeCreateSchema(StressSettings settings)
     {
         JavaDriverClient client = settings.getJavaDriverClient(false);
