@@ -31,7 +31,7 @@ table: typestest
 # The CQL for creating a table you wish to stress (optional if it already exists)
 #
 table_definition: |
-  CREATE TABLE typestest (
+  CREATE TABLE stresscql.typestest (
         name text,
         choice boolean,
         date timestamp,

@@ -108,6 +108,8 @@ public final class Stress
             StressAction stressAction = new StressAction(settings, logout);
             stressAction.run();
         }
+        //SSTableWriter will import StorageService which will start thread-pools we cannot shutdown, so call exit
+        System.exit(0);
     }
 
     /**

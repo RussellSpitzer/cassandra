@@ -29,6 +29,7 @@ import org.apache.cassandra.config.EncryptionOptions;
 import org.apache.cassandra.stress.util.JavaDriverClient;
 import org.apache.cassandra.stress.util.SimpleThriftClient;
 import org.apache.cassandra.stress.util.SmartThriftClient;
+import org.apache.cassandra.stress.util.SSTableWriterClient;
 import org.apache.cassandra.stress.util.ThriftClient;
 import org.apache.cassandra.thrift.Cassandra;
 import org.apache.cassandra.thrift.InvalidRequestException;
@@ -66,6 +67,7 @@ public class StressSettings implements Serializable
     }
 
     private SmartThriftClient tclient;
+    private SSTableWriterClient wclient = null;
 
     /**
      * Thrift client connection
@@ -187,6 +189,28 @@ public class StressSettings implements Serializable
         }
     }
 
+    public SSTableWriterClient getSSTableWriterClient()
+    {
+        synchronized (this)
+        {
+            if (wclient !=null)
+                return wclient;
+            if (!(this.command instanceof SettingsCommandUser))
+            {
+                //TODO add in thrift client writer
+                return null;
+            }
+            else
+            {
+                SettingsCommandUser userCommand = (SettingsCommandUser) this.command;
+                String tableCql = userCommand.profile.getTableCql();
+                assert (tableCql != null);
+                //TODO have this default to the on node directory for the SSTABLE to be made in
+                return wclient = new SSTableWriterClient(tableCql, mode.sstableOutputDir, userCommand.profile.getInsertString());
+            }
+        }
+    }
+
     public void maybeCreateKeyspaces()
     {
         if (command.type == Command.WRITE || command.type == Command.COUNTER_WRITE || command.type == Command.USER)
@@ -289,10 +313,14 @@ public class StressSettings implements Serializable
 
     public synchronized void disconnect()
     {
-        if (client == null)
-            return;
-
-        client.disconnect();
-        client = null;
+        if (client != null)
+        {
+            client.disconnect();
+            client = null;
+        }
+        if (wclient != null)
+        {
+            wclient.close();
+        }
     }
 }

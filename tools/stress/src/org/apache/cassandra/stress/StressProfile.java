@@ -158,6 +158,11 @@ public class StressProfile implements Serializable
         }
     }
 
+    public String getTableCql()
+    {
+        return tableCql;
+    }
+
     public void maybeCreateSchema(StressSettings settings)
     {
         JavaDriverClient client = settings.getJavaDriverClient(false);
@@ -257,6 +262,52 @@ public class StressProfile implements Serializable
         // TODO validation
         name = name.toLowerCase();
         return new SchemaQuery(timer, generator, settings, thriftQueryIds.get(name), queryStatements.get(name), ThriftConversion.fromThrift(settings.command.consistencyLevel), ValidationType.NOT_FAIL);
+    }
+
+    /**
+     * SSTable writer needs an INSERT query to build a prepared statement with, we'll order the variables in the same
+     * order as the UPDATE statement used in SchemaInsert so we can use the same generator without modification.
+     * @return INSERT INTO keyspace.tablename (col1,col2,col3,col4...pkey1,pkey2...pkeyn) VALUES (?,?,?...)
+     */
+    public String getInsertString()
+    {
+        Set<ColumnMetadata> keyColumns = com.google.common.collect.Sets.newHashSet(tableMetaData.getPrimaryKey());
+        StringBuilder sb = new StringBuilder();
+        boolean firstCol = true;
+
+        ArrayList<ColumnMetadata> reorderedColumns = new ArrayList<>();
+        //Add non-pkey
+        for (ColumnMetadata c : tableMetaData.getColumns())
+            if (!keyColumns.contains(c))
+                    reorderedColumns.add(c);
+        //Add pkey
+        for (ColumnMetadata c : tableMetaData.getColumns())
+            if (keyColumns.contains(c))
+                    reorderedColumns.add(c);
+
+        sb.append("INSERT INTO ").append(keyspaceName).append(".").append(tableName).append(" ");
+        sb.append("(");
+        for (ColumnMetadata c : reorderedColumns)
+        {
+            if (!firstCol)
+                sb.append(",");
+            sb.append(c.getName());
+            firstCol=false;
+        }
+        sb.append(")");
+        sb.append(" VALUES ");
+        sb.append("(");
+        firstCol=true;
+        for (ColumnMetadata c : reorderedColumns)
+        {
+            if (!firstCol)
+                sb.append(",");
+            sb.append("?");
+            firstCol=false;
+        }
+        sb.append(")");
+
+        return sb.toString();
     }
 
     public SchemaInsert getInsert(Timer timer, PartitionGenerator generator, StressSettings settings)

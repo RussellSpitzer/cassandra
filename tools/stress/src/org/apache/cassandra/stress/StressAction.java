@@ -37,6 +37,7 @@ import org.apache.cassandra.stress.operations.OpDistribution;
 import org.apache.cassandra.stress.operations.OpDistributionFactory;
 import org.apache.cassandra.stress.settings.*;
 import org.apache.cassandra.stress.util.JavaDriverClient;
+import org.apache.cassandra.stress.util.SSTableWriterClient;
 import org.apache.cassandra.stress.util.ThriftClient;
 import org.apache.cassandra.stress.util.Timer;
 import org.apache.cassandra.transport.SimpleClient;
@@ -250,7 +251,7 @@ public class StressAction implements Runnable
 
         public void run()
         {
-
+            SSTableWriterClient wclient = null;
             try
             {
 
@@ -269,6 +270,9 @@ public class StressAction implements Runnable
                     case THRIFT:
                     case THRIFT_SMART:
                         tclient = settings.getThriftClient();
+                        break;
+                    case SSTABLE:
+                        wclient = settings.getSSTableWriterClient();
                         break;
                     default:
                         throw new IllegalStateException();
@@ -322,6 +326,9 @@ public class StressAction implements Runnable
                                 break;
                             case SIMPLE_NATIVE:
                                 op.run(sclient);
+                                break;
+                            case SSTABLE:
+                                op.run(wclient);
                                 break;
                             case THRIFT:
                             case THRIFT_SMART:

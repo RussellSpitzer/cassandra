@@ -27,6 +27,7 @@ import org.apache.cassandra.stress.generate.Partition;
 import org.apache.cassandra.stress.generate.PartitionGenerator;
 import org.apache.cassandra.stress.settings.*;
 import org.apache.cassandra.stress.util.JavaDriverClient;
+import org.apache.cassandra.stress.util.SSTableWriterClient;
 import org.apache.cassandra.stress.util.ThriftClient;
 import org.apache.cassandra.stress.util.Timer;
 import org.apache.cassandra.thrift.InvalidRequestException;
@@ -73,6 +74,10 @@ public abstract class Operation
     }
 
     public void run(JavaDriverClient client) throws IOException {
+        throw new UnsupportedOperationException();
+    }
+
+    public void run(SSTableWriterClient client) throws IOException {
         throw new UnsupportedOperationException();
     }
 

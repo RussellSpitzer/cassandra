@@ -30,6 +30,7 @@ import com.datastax.driver.core.BoundStatement;
 import com.datastax.driver.core.PreparedStatement;
 import com.datastax.driver.core.Statement;
 import org.apache.cassandra.db.ConsistencyLevel;
+import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.stress.generate.Distribution;
 import org.apache.cassandra.stress.generate.Partition;
 import org.apache.cassandra.stress.generate.PartitionGenerator;
@@ -38,6 +39,7 @@ import org.apache.cassandra.stress.generate.Row;
 import org.apache.cassandra.stress.settings.StressSettings;
 import org.apache.cassandra.stress.settings.ValidationType;
 import org.apache.cassandra.stress.util.JavaDriverClient;
+import org.apache.cassandra.stress.util.SSTableWriterClient;
 import org.apache.cassandra.stress.util.ThriftClient;
 import org.apache.cassandra.stress.util.Timer;
 
@@ -150,6 +152,46 @@ public class SchemaInsert extends SchemaStatement
         }
     }
 
+    private class SSTableWriterRun extends Runner
+    {
+        final SSTableWriterClient client;
+
+        private SSTableWriterRun(SSTableWriterClient client)
+        {
+            this.client = client;
+        }
+
+        public boolean run() throws Exception
+        {
+            Partition.RowIterator[] iterators = new Partition.RowIterator[partitions.size()];
+            for (int i = 0; i < iterators.length; i++)
+                iterators[i] = partitions.get(i).iterator(perVisit.next());
+            partitionCount = partitions.size();
+            List<List<Object>> rowBatch = new ArrayList<>();
+            boolean done;
+            do
+            {
+                done = true;
+                for (Partition.RowIterator iterator : iterators)
+                {
+                    if (iterator.done())
+                        continue;
+
+                    for (Row row : iterator.batch(perBatch.next()))
+                    {
+                        rowBatch.add(getBindBuffer(row));
+                        rowCount += 1;
+                    }
+
+                    done &= iterator.done();
+                }
+            } while (!done);
+            client.addRowsToSSTable(rowBatch);
+
+            return true;
+        }
+    }
+
     @Override
     public void run(JavaDriverClient client) throws IOException
     {
@@ -160,6 +202,12 @@ public class SchemaInsert extends SchemaStatement
     public void run(ThriftClient client) throws IOException
     {
         timeWithRetry(new ThriftRun(client));
+    }
+
+    @Override
+    public void run(SSTableWriterClient client) throws IOException
+    {
+        timeWithRetry(new SSTableWriterRun(client));
     }
 
 }

@@ -54,7 +54,7 @@ public abstract class SchemaStatement extends Operation
     final Integer thriftId;
     final ConsistencyLevel cl;
     final ValidationType validationType;
-    private final int[] argumentIndex;
+    protected final int[] argumentIndex;
     private final Object[] bindBuffer;
     private final Object[][] randomBuffer;
     private final Random random = new Random();
@@ -106,6 +106,13 @@ public abstract class SchemaStatement extends Operation
         for (int i = 0 ; i < argumentIndex.length ; i++)
             bindBuffer[i] = row.get(argumentIndex[i]);
         return statement.bind(bindBuffer);
+    }
+
+    List<Object> getBindBuffer(Row row)
+    {
+        for (int i = 0 ; i < argumentIndex.length ; i++)
+            bindBuffer[i] = row.get(argumentIndex[i]);
+        return Arrays.asList(bindBuffer);
     }
 
     List<ByteBuffer> thriftRowArgs(Row row)
