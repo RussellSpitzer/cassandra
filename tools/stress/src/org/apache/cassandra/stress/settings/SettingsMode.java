@@ -156,7 +156,7 @@ public class SettingsMode implements Serializable
         final OptionSimple api = new OptionSimple("sstable", "", null, "", true);
         final OptionSimple outputdir = new OptionSimple("outputdir=", ".*", null, "Specify the directory for writing sstables", false);
         @Override
-        public List<? extends Option> options() { return Arrays.asList(api); }
+        public List<? extends Option> options() { return Arrays.asList(api, outputdir); }
     }
 
     private static final class ThriftOptions extends GroupedOptions

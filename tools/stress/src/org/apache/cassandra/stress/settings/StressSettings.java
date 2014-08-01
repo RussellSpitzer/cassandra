@@ -197,7 +197,12 @@ public class StressSettings implements Serializable
                 return wclient;
             if (!(this.command instanceof SettingsCommandUser))
             {
-                //TODO add in thrift client writer
+                if (command.type == Command.WRITE)
+                {
+                    return wclient = SSTableWriterClient.getLegacySSTableWriterClient(
+                            schema.keyspace, "\"Standard1\"", columns.namestrs, mode.sstableOutputDir);
+                }
+                //TODO error out here
                 return null;
             }
             else

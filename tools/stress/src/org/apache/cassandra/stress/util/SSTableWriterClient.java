@@ -29,10 +29,17 @@ import java.util.concurrent.ArrayBlockingQueue;
 public class SSTableWriterClient implements Runnable
 {
     private CQLSSTableWriter writer = null;
-    private ArrayBlockingQueue<List<List<Object>>> rowsToAdd = new ArrayBlockingQueue<>(10000);
+    private ArrayBlockingQueue<List<List<Object>>> rowsToAdd = new ArrayBlockingQueue<>(2000);
     private Thread sstableThread;
     private boolean finished = false;
 
+    /**
+     * For creating a SSTable Writer Client for a User Command, in this case the create statement will be
+     * variable based upon what the user has specified.
+     * @param createSchemaStatement
+     * @param directory
+     * @param insertStatement
+     */
     public SSTableWriterClient(String createSchemaStatement, String directory, String insertStatement)
     {
         //256 is the on disk data size actual heap usage will be much larger
@@ -43,6 +50,42 @@ public class SSTableWriterClient implements Runnable
         sstableThread.start();
     }
 
+    public static SSTableWriterClient getLegacySSTableWriterClient(String keyspace, String table, List<String> colNames, String directory)
+    {
+        String createStatement = createLegacyTableCreateStatement(keyspace, table, colNames);
+        String insertStatement = createLegacyInsertStatement(keyspace, table, colNames);
+        return new SSTableWriterClient(createStatement,directory,insertStatement);
+
+    }
+
+    private static String createLegacyTableCreateStatement(String keyspace, String table, List<String> colNames)
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.append("CREATE TABLE \"").append(keyspace).append("\".").append(table).append(" ");
+
+        sb.append("( key blob");
+        for (String colName : colNames)
+            sb.append(", \"").append(colName).append("\" blob");
+        sb.append(", PRIMARY KEY ((key)) )");
+
+        return sb.toString();
+    }
+
+    private static String createLegacyInsertStatement(String keyspace, String table, List<String> colNames)
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.append("INSERT INTO \"").append(keyspace).append("\".").append(table).append(" ");
+
+        sb.append("( key");
+        for (String colName: colNames)
+            sb.append(", \"").append(colName).append("\"");
+        sb.append(") VALUES ( ?");
+        for (String colName: colNames)
+            sb.append(", ?");
+        sb.append(")");
+        return sb.toString();
+    }
+
     public void addRowsToSSTable(List<List<Object>> rowValues) throws InterruptedException
     {
         this.rowsToAdd.put(rowValues);
@@ -51,24 +94,22 @@ public class SSTableWriterClient implements Runnable
     public void run()
     {
         List<List<Object>> rows;
-        while (!finished)
-            while ((rows = rowsToAdd.poll()) != null)
-            {
-                try
-                {
-                    for (List<Object> row : rows)
-                        this.writer.addRow(row);
-                }
-                catch (Exception e)
-                {
-                    e.printStackTrace();
-                }
-            }
         try
         {
+            while (!finished)
+            {
+                while ((rows = rowsToAdd.poll()) != null)
+                {
+
+                    for (List<Object> row : rows)
+                        this.writer.addRow(row);
+
+                }
+                Thread.yield();
+            }
             this.writer.close();
         }
-        catch (IOException e)
+        catch (Exception e)
         {
             e.printStackTrace();
         }

@@ -33,6 +33,7 @@ import org.apache.cassandra.stress.generate.DistributionFixed;
 import org.apache.cassandra.stress.generate.PartitionGenerator;
 import org.apache.cassandra.stress.generate.Row;
 import org.apache.cassandra.stress.settings.Command;
+import org.apache.cassandra.stress.settings.ConnectionAPI;
 import org.apache.cassandra.stress.settings.CqlVersion;
 import org.apache.cassandra.stress.settings.StressSettings;
 import org.apache.cassandra.stress.util.Timer;
@@ -216,6 +217,8 @@ public abstract class PredefinedOperation extends Operation
                 }
 
             case WRITE:
+                if (settings.mode.api == ConnectionAPI.SSTABLE)
+                    return new SSTableInserter(timer, generator, settings);
 
                 switch(settings.mode.style)
                 {
