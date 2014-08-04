@@ -17,9 +17,15 @@
  */
 package org.apache.cassandra.stress.util;
 
+import org.apache.cassandra.cql3.QueryProcessor;
+import org.apache.cassandra.cql3.statements.CreateTableStatement;
+import org.apache.cassandra.cql3.statements.ParsedStatement;
+import org.apache.cassandra.db.Directories;
+import org.apache.cassandra.exceptions.RequestValidationException;
 import org.apache.cassandra.io.sstable.CQLSSTableWriter;
+import org.apache.cassandra.service.ClientState;
 
-import java.io.IOException;
+import java.io.File;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 
@@ -42,10 +48,32 @@ public class SSTableWriterClient implements Runnable
      */
     public SSTableWriterClient(String createSchemaStatement, String directory, String insertStatement)
     {
+        File outputDir;
+        if (directory == null)
+        {
+            try
+            {
+                ClientState state = ClientState.forInternalCalls();
+                ParsedStatement.Prepared prepared = QueryProcessor.getStatement(createSchemaStatement, state);
+                CreateTableStatement stmt = (CreateTableStatement) prepared.statement;
+                stmt.validate(state);
+                Directories dir = new Directories(stmt.getCFMetaData());
+                outputDir = dir.getDirectoryForNewSSTables();
+            }
+            catch (RequestValidationException e)
+            {
+                throw new RuntimeException(e);
+            }
+        }
+        else
+        {
+            outputDir = new File(directory);
+        }
+        System.out.println("Creating SSTABLES in " + outputDir.toPath().toString());
+
         //256 is the on disk data size actual heap usage will be much larger
-        //TODO warn if XMS is not sufficently high and using sstable writer
-        this.writer = CQLSSTableWriter.builder().inDirectory(directory).forTable(createSchemaStatement)
-                .inDirectory(directory).using(insertStatement).withBufferSizeInMB(256).build();
+        this.writer = CQLSSTableWriter.builder().inDirectory(outputDir).forTable(createSchemaStatement)
+                .inDirectory(outputDir).using(insertStatement).withBufferSizeInMB(256).build();
         sstableThread = new Thread(this, "SSTableWriterThread");
         sstableThread.start();
     }
@@ -54,7 +82,7 @@ public class SSTableWriterClient implements Runnable
     {
         String createStatement = createLegacyTableCreateStatement(keyspace, table, colNames);
         String insertStatement = createLegacyInsertStatement(keyspace, table, colNames);
-        return new SSTableWriterClient(createStatement,directory,insertStatement);
+        return new SSTableWriterClient(createStatement, directory, insertStatement);
 
     }
 

@@ -193,6 +193,7 @@ public class StressSettings implements Serializable
     {
         synchronized (this)
         {
+            //If there is no output directory specified place this in the correct C* directory
             if (wclient !=null)
                 return wclient;
             if (!(this.command instanceof SettingsCommandUser))
@@ -202,15 +203,12 @@ public class StressSettings implements Serializable
                     return wclient = SSTableWriterClient.getLegacySSTableWriterClient(
                             schema.keyspace, "\"Standard1\"", columns.namestrs, mode.sstableOutputDir);
                 }
-                //TODO error out here
-                return null;
+                throw new RuntimeException("SSTABLE Mode only supports WRITE and USER Commands");
             }
             else
             {
                 SettingsCommandUser userCommand = (SettingsCommandUser) this.command;
                 String tableCql = userCommand.profile.getTableCql();
-                assert (tableCql != null);
-                //TODO have this default to the on node directory for the SSTABLE to be made in
                 return wclient = new SSTableWriterClient(tableCql, mode.sstableOutputDir, userCommand.profile.getInsertString());
             }
         }
