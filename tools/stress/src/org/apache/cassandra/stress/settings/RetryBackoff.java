@@ -52,6 +52,7 @@ public class RetryBackoff
     /**
      * Returns the backoff in milliseconds for the requested trial for the set
      * backoff strategy.
+     *
      * @param trial The current iteration
      * @return The time to sleep in milliseconds
      */
@@ -76,7 +77,7 @@ public class RetryBackoff
         final Map<String, BackoffStrategy> lookup = new HashMap<>();
         for (BackoffStrategy rb : BackoffStrategy.values())
         {
-                lookup.put(rb.name, rb);
+            lookup.put(rb.name, rb);
         }
         LOOKUP = lookup;
     }
