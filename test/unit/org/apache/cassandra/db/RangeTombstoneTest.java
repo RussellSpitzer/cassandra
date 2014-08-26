@@ -18,6 +18,7 @@
 */
 package org.apache.cassandra.db;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -25,15 +26,16 @@ import java.util.List;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.concurrent.ExecutionException;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterators;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import org.apache.cassandra.SchemaLoader;
-import org.apache.cassandra.config.ColumnDefinition;
-import org.apache.cassandra.config.DatabaseDescriptor;
-import org.apache.cassandra.config.IndexType;
+import org.apache.cassandra.config.*;
+import org.apache.cassandra.Util;
 import org.apache.cassandra.db.columniterator.OnDiskAtomIterator;
 import org.apache.cassandra.db.compaction.CompactionManager;
 import org.apache.cassandra.db.compaction.SizeTieredCompactionStrategy;
@@ -48,20 +50,33 @@ import org.apache.cassandra.db.index.PerColumnSecondaryIndex;
 import org.apache.cassandra.db.index.SecondaryIndex;
 import org.apache.cassandra.db.index.SecondaryIndexSearcher;
 import org.apache.cassandra.db.marshal.Int32Type;
+import org.apache.cassandra.db.marshal.IntegerType;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.io.sstable.SSTableReader;
+import org.apache.cassandra.locator.SimpleStrategy;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.concurrent.OpOrder;
 import org.apache.cassandra.utils.memory.MemtableAllocator;
 
 import static org.apache.cassandra.Util.dk;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class RangeTombstoneTest extends SchemaLoader
+public class RangeTombstoneTest
 {
-    private static final String KSNAME = "Keyspace1";
+    private static final String KSNAME = "RangeTombstoneTest";
     private static final String CFNAME = "StandardInteger1";
+
+    @BeforeClass
+    public static void defineSchema() throws ConfigurationException
+    {
+        SchemaLoader.prepareServer();
+        SchemaLoader.createKeyspace(KSNAME,
+                                    SimpleStrategy.class,
+                                    KSMetaData.optsWithRF(1),
+                                    CFMetaData.denseCFMetaData(KSNAME, CFNAME, IntegerType.instance));
+    }
 
     @Test
     public void simpleQueryWithRangeTombstoneTest() throws Exception
@@ -77,25 +92,25 @@ public class RangeTombstoneTest extends SchemaLoader
         rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
         for (int i = 0; i < 40; i += 2)
             add(rm, i, 0);
-        rm.apply();
+        rm.applyUnsafe();
         cfs.forceBlockingFlush();
 
         rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
         cf = rm.addOrGet(CFNAME);
         delete(cf, 10, 22, 1);
-        rm.apply();
+        rm.applyUnsafe();
         cfs.forceBlockingFlush();
 
         rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
         for (int i = 1; i < 40; i += 2)
             add(rm, i, 2);
-        rm.apply();
+        rm.applyUnsafe();
         cfs.forceBlockingFlush();
 
         rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
         cf = rm.addOrGet(CFNAME);
         delete(cf, 19, 27, 3);
-        rm.apply();
+        rm.applyUnsafe();
         // We don't flush to test with both a range tomsbtone in memtable and in sstable
 
         // Queries by name
@@ -109,17 +124,17 @@ public class RangeTombstoneTest extends SchemaLoader
         cf = cfs.getColumnFamily(QueryFilter.getNamesFilter(dk(key), CFNAME, columns, System.currentTimeMillis()));
 
         for (int i : live)
-            assert isLive(cf, cf.getColumn(b(i))) : "Cell " + i + " should be live";
+            assertTrue("Cell " + i + " should be live", isLive(cf, cf.getColumn(b(i))));
         for (int i : dead)
-            assert !isLive(cf, cf.getColumn(b(i))) : "Cell " + i + " shouldn't be live";
+            assertTrue("Cell " + i + " shouldn't be live", !isLive(cf, cf.getColumn(b(i))));
 
         // Queries by slices
         cf = cfs.getColumnFamily(QueryFilter.getSliceFilter(dk(key), CFNAME, b(7), b(30), false, Integer.MAX_VALUE, System.currentTimeMillis()));
 
         for (int i : new int[]{ 7, 8, 9, 11, 13, 15, 17, 28, 29, 30 })
-            assert isLive(cf, cf.getColumn(b(i))) : "Cell " + i + " should be live";
+            assertTrue("Cell " + i + " should be live", isLive(cf, cf.getColumn(b(i))));
         for (int i : new int[]{ 10, 12, 14, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27 })
-            assert !isLive(cf, cf.getColumn(b(i))) : "Cell " + i + " shouldn't be live";
+            assertTrue("Cell " + i + " shouldn't be live", !isLive(cf, cf.getColumn(b(i))));
     }
 
     @Test
@@ -137,17 +152,17 @@ public class RangeTombstoneTest extends SchemaLoader
         rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
         for (int i = 0; i < 40; i += 2)
             add(rm, i, 0);
-        rm.apply();
+        rm.applyUnsafe();
 
         rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
         cf = rm.addOrGet(CFNAME);
         delete(cf, 5, 10, 1);
-        rm.apply();
+        rm.applyUnsafe();
 
         rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
         cf = rm.addOrGet(CFNAME);
         delete(cf, 15, 20, 2);
-        rm.apply();
+        rm.applyUnsafe();
 
         cf = cfs.getColumnFamily(QueryFilter.getSliceFilter(dk(key), CFNAME, b(11), b(14), false, Integer.MAX_VALUE, System.currentTimeMillis()));
         Collection<RangeTombstone> rt = rangeTombstones(cf);
@@ -224,6 +239,59 @@ public class RangeTombstoneTest extends SchemaLoader
     }
 
     @Test
+    public void test7808_1() throws ExecutionException, InterruptedException
+    {
+        Keyspace ks = Keyspace.open(KSNAME);
+        ColumnFamilyStore cfs = ks.getColumnFamilyStore(CFNAME);
+        cfs.metadata.gcGraceSeconds(2);
+
+        String key = "7808_1";
+        Mutation rm;
+        rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
+        for (int i = 0; i < 40; i += 2)
+            add(rm, i, 0);
+        rm.apply();
+        cfs.forceBlockingFlush();
+        rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
+        ColumnFamily cf = rm.addOrGet(CFNAME);
+        cf.delete(new DeletionInfo(1, 1));
+        rm.apply();
+        cfs.forceBlockingFlush();
+        Thread.sleep(5);
+        cfs.forceMajorCompaction();
+    }
+
+    @Test
+    public void test7808_2() throws ExecutionException, InterruptedException, IOException
+    {
+        Keyspace ks = Keyspace.open(KSNAME);
+        ColumnFamilyStore cfs = ks.getColumnFamilyStore(CFNAME);
+        cfs.metadata.gcGraceSeconds(2);
+
+        String key = "7808_2";
+        Mutation rm;
+        rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
+        for (int i = 10; i < 20; i++)
+            add(rm, i, 0);
+        rm.apply();
+        cfs.forceBlockingFlush();
+
+        rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
+        ColumnFamily cf = rm.addOrGet(CFNAME);
+        cf.delete(new DeletionInfo(0,0));
+        rm.apply();
+
+        rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
+        add(rm, 5, 1);
+        rm.apply();
+
+        cfs.forceBlockingFlush();
+        Thread.sleep(5);
+        cfs.forceMajorCompaction();
+        assertEquals(1, Util.getColumnFamily(ks, Util.dk(key), CFNAME).getColumnCount());
+    }
+
+    @Test
     public void overlappingRangeTest() throws Exception
     {
         CompactionManager.instance.disableAutoCompaction();
@@ -238,46 +306,46 @@ public class RangeTombstoneTest extends SchemaLoader
         rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
         for (int i = 0; i < 20; i++)
             add(rm, i, 0);
-        rm.apply();
+        rm.applyUnsafe();
         cfs.forceBlockingFlush();
 
         rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
         cf = rm.addOrGet(CFNAME);
         delete(cf, 5, 15, 1);
-        rm.apply();
+        rm.applyUnsafe();
         cfs.forceBlockingFlush();
 
         rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
         cf = rm.addOrGet(CFNAME);
         delete(cf, 5, 10, 1);
-        rm.apply();
+        rm.applyUnsafe();
         cfs.forceBlockingFlush();
 
         rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
         cf = rm.addOrGet(CFNAME);
         delete(cf, 5, 8, 2);
-        rm.apply();
+        rm.applyUnsafe();
         cfs.forceBlockingFlush();
 
         cf = cfs.getColumnFamily(QueryFilter.getIdentityFilter(dk(key), CFNAME, System.currentTimeMillis()));
 
         for (int i = 0; i < 5; i++)
-            assert isLive(cf, cf.getColumn(b(i))) : "Cell " + i + " should be live";
+            assertTrue("Cell " + i + " should be live", isLive(cf, cf.getColumn(b(i))));
         for (int i = 16; i < 20; i++)
-            assert isLive(cf, cf.getColumn(b(i))) : "Cell " + i + " should be live";
+            assertTrue("Cell " + i + " should be live", isLive(cf, cf.getColumn(b(i))));
         for (int i = 5; i <= 15; i++)
-            assert !isLive(cf, cf.getColumn(b(i))) : "Cell " + i + " shouldn't be live";
+            assertTrue("Cell " + i + " shouldn't be live", !isLive(cf, cf.getColumn(b(i))));
 
         // Compact everything and re-test
         CompactionManager.instance.performMaximal(cfs);
         cf = cfs.getColumnFamily(QueryFilter.getIdentityFilter(dk(key), CFNAME, System.currentTimeMillis()));
 
         for (int i = 0; i < 5; i++)
-            assert isLive(cf, cf.getColumn(b(i))) : "Cell " + i + " should be live";
+            assertTrue("Cell " + i + " should be live", isLive(cf, cf.getColumn(b(i))));
         for (int i = 16; i < 20; i++)
-            assert isLive(cf, cf.getColumn(b(i))) : "Cell " + i + " should be live";
+            assertTrue("Cell " + i + " should be live", isLive(cf, cf.getColumn(b(i))));
         for (int i = 5; i <= 15; i++)
-            assert !isLive(cf, cf.getColumn(b(i))) : "Cell " + i + " shouldn't be live";
+            assertTrue("Cell " + i + " shouldn't be live", !isLive(cf, cf.getColumn(b(i))));
     }
 
     @Test
@@ -293,22 +361,22 @@ public class RangeTombstoneTest extends SchemaLoader
 
         rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
         add(rm, 2, 0);
-        rm.apply();
+        rm.applyUnsafe();
         cfs.forceBlockingFlush();
 
         rm = new Mutation(KSNAME, ByteBufferUtil.bytes(key));
         // Deletes everything but without being a row tombstone
         delete(rm.addOrGet(CFNAME), 0, 10, 1);
         add(rm, 1, 2);
-        rm.apply();
+        rm.applyUnsafe();
         cfs.forceBlockingFlush();
 
         // Get the last value of the row
         cf = cfs.getColumnFamily(QueryFilter.getSliceFilter(dk(key), CFNAME, Composites.EMPTY, Composites.EMPTY, true, 1, System.currentTimeMillis()));
 
-        assert !cf.isEmpty();
+        assertFalse(cf.isEmpty());
         int last = i(cf.getSortedColumns().iterator().next().name());
-        assert last == 1 : "Last column should be column 1 since column 2 has been deleted";
+        assertEquals("Last column should be column 1 since column 2 has been deleted", 1, last);
     }
 
     @Test
@@ -332,14 +400,14 @@ public class RangeTombstoneTest extends SchemaLoader
         Mutation rm = new Mutation(KSNAME, key);
         for (int i = 0; i < 10; i += 2)
             add(rm, i, 0);
-        rm.apply();
+        rm.applyUnsafe();
         cfs.forceBlockingFlush();
 
         rm = new Mutation(KSNAME, key);
         ColumnFamily cf = rm.addOrGet(CFNAME);
         for (int i = 0; i < 10; i += 2)
             delete(cf, 0, 7, 0);
-        rm.apply();
+        rm.applyUnsafe();
         cfs.forceBlockingFlush();
 
         // there should be 2 sstables
@@ -389,18 +457,18 @@ public class RangeTombstoneTest extends SchemaLoader
 
         Mutation rm = new Mutation(KSNAME, key);
         add(rm, 1, 0);
-        rm.apply();
+        rm.applyUnsafe();
 
         // add a RT which hides the column we just inserted
         rm = new Mutation(KSNAME, key);
         ColumnFamily cf = rm.addOrGet(CFNAME);
         delete(cf, 0, 1, 1);
-        rm.apply();
+        rm.applyUnsafe();
 
         // now re-insert that column
         rm = new Mutation(KSNAME, key);
         add(rm, 1, 2);
-        rm.apply();
+        rm.applyUnsafe();
 
         cfs.forceBlockingFlush();
 
@@ -433,14 +501,14 @@ public class RangeTombstoneTest extends SchemaLoader
         Mutation rm = new Mutation(KSNAME, key);
         for (int i = 0; i < 10; i++)
             add(rm, i, 0);
-        rm.apply();
+        rm.applyUnsafe();
         cfs.forceBlockingFlush();
 
         rm = new Mutation(KSNAME, key);
         ColumnFamily cf = rm.addOrGet(CFNAME);
         for (int i = 0; i < 10; i += 2)
             delete(cf, 0, 7, 0);
-        rm.apply();
+        rm.applyUnsafe();
         cfs.forceBlockingFlush();
 
         // We should have indexed 1 column

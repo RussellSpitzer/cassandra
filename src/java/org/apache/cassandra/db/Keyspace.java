@@ -210,7 +210,7 @@ public class Keyspace
         }
 
         if ((columnFamilyName != null) && !tookSnapShot)
-            throw new IOException("Failed taking snapshot. Column family " + columnFamilyName + " does not exist.");
+            throw new IOException("Failed taking snapshot. Table " + columnFamilyName + " does not exist.");
     }
 
     /**
@@ -377,7 +377,7 @@ public class Keyspace
                 ColumnFamilyStore cfs = columnFamilyStores.get(cf.id());
                 if (cfs == null)
                 {
-                    logger.error("Attempting to mutate non-existant column family {}", cf.id());
+                    logger.error("Attempting to mutate non-existant table {}", cf.id());
                     continue;
                 }
 

@@ -819,7 +819,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                 {
                     bootstrapTokens = BootStrapper.getRandomTokens(tokenMetadata, DatabaseDescriptor.getNumTokens());
                     if (DatabaseDescriptor.getNumTokens() == 1)
-                        logger.warn("Generated random token " + bootstrapTokens + ". Random tokens will result in an unbalanced ring; see http://wiki.apache.org/cassandra/Operations");
+                        logger.warn("Generated random token {}. Random tokens will result in an unbalanced ring; see http://wiki.apache.org/cassandra/Operations", bootstrapTokens);
                     else
                         logger.info("Generated random tokens. tokens are {}", bootstrapTokens);
                 }
@@ -836,7 +836,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
                 if (bootstrapTokens.size() != DatabaseDescriptor.getNumTokens())
                     throw new ConfigurationException("Cannot change the number of tokens from " + bootstrapTokens.size() + " to " + DatabaseDescriptor.getNumTokens());
                 else
-                    logger.info("Using saved tokens " + bootstrapTokens);
+                    logger.info("Using saved tokens {}", bootstrapTokens);
             }
         }
 
@@ -2254,9 +2254,9 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             throw new IOException("Cannot snapshot until bootstrap completes");
 
         if (columnFamilyName == null)
-            throw new IOException("You must supply a column family name");
+            throw new IOException("You must supply a table name");
         if (columnFamilyName.contains("."))
-            throw new IllegalArgumentException("Cannot take a snapshot of a secondary index by itself. Run snapshot on the column family that owns the index.");
+            throw new IllegalArgumentException("Cannot take a snapshot of a secondary index by itself. Run snapshot on the table that owns the index.");
 
         if (tag == null || tag.equals(""))
             throw new IOException("You must supply a snapshot name.");
@@ -2390,7 +2390,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             {
                 if(!allowIndexes)
                 {
-                   logger.warn("Operation not allowed on secondary Index column family ({})", cfName);
+                   logger.warn("Operation not allowed on secondary Index table ({})", cfName);
                     continue;
                 }
 
@@ -2404,7 +2404,7 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
             {
                 Collection< SecondaryIndex > indexes = cfStore.indexManager.getIndexesByNames(new HashSet<>(Arrays.asList(cfName)));
                 if (indexes.isEmpty())
-                    logger.warn(String.format("Invalid column family index specified: %s/%s. Proceeding with others.", baseCfName, idxName));
+                    logger.warn(String.format("Invalid index specified: %s/%s. Proceeding with others.", baseCfName, idxName));
                 else
                     valid.add(Iterables.get(indexes, 0).getIndexCfs());
             }
@@ -2496,17 +2496,12 @@ public class StorageService extends NotificationBroadcasterSupport implements IE
         return forceRepairAsync(keyspace, isSequential, isLocal, ranges, fullRepair, columnFamilies);
     }
 
-    public int forceRepairAsync(String keyspace, boolean isSequential, boolean isLocal, Collection<Range<Token>> ranges, boolean fullRepair, String... columnFamilies)
+    public int forceRepairAsync(final String keyspace, final boolean isSequential, final boolean isLocal, final Collection<Range<Token>> ranges, final boolean fullRepair, final String... columnFamilies)
     {
         if (Keyspace.SYSTEM_KS.equals(keyspace) || ranges.isEmpty())
             return 0;
 
         int cmd = nextRepairCommand.incrementAndGet();
-        if (!FBUtilities.isUnix() && isSequential)
-        {
-            logger.warn("Snapshot-based repair is not yet supported on Windows.  Reverting to parallel repair.");
-            isSequential = false;
-        }
         new Thread(createRepairTask(cmd, keyspace, ranges, isSequential, isLocal, fullRepair, columnFamilies)).start();
         return cmd;
     }

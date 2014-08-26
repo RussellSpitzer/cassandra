@@ -58,10 +58,6 @@ public abstract class PredefinedOperation extends Operation
     {
         return settings.mode.cqlVersion == CqlVersion.CQL3;
     }
-    public boolean isCql2()
-    {
-        return settings.mode.cqlVersion == CqlVersion.CQL2;
-    }
     public Object getCqlCache()
     {
         return cqlCache;

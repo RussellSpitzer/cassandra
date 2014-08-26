@@ -29,6 +29,8 @@ import java.util.concurrent.*;
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
 
+import org.apache.cassandra.config.UFMetaData;
+import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -173,6 +175,24 @@ public class MigrationManager
             listener.onCreateUserType(ut.keyspace, ut.getNameAsString());
     }
 
+    public void notifyCreateFunction(UFMetaData uf)
+    {
+        for (IMigrationListener listener : listeners)
+            listener.onCreateFunction(uf.namespace, uf.functionName);
+    }
+
+    public void notifyUpdateFunction(UFMetaData uf)
+    {
+        for (IMigrationListener listener : listeners)
+            listener.onUpdateFunction(uf.namespace, uf.functionName);
+    }
+
+    public void notifyDropFunction(UFMetaData uf)
+    {
+        for (IMigrationListener listener : listeners)
+            listener.onDropFunction(uf.namespace, uf.functionName);
+    }
+
     public void notifyUpdateKeyspace(KSMetaData ksm)
     {
         for (IMigrationListener listener : listeners)
@@ -241,11 +261,11 @@ public class MigrationManager
 
         KSMetaData ksm = Schema.instance.getKSMetaData(cfm.ksName);
         if (ksm == null)
-            throw new ConfigurationException(String.format("Cannot add column family '%s' to non existing keyspace '%s'.", cfm.cfName, cfm.ksName));
+            throw new ConfigurationException(String.format("Cannot add table '%s' to non existing keyspace '%s'.", cfm.cfName, cfm.ksName));
         else if (ksm.cfMetaData().containsKey(cfm.cfName))
             throw new AlreadyExistsException(cfm.ksName, cfm.cfName);
 
-        logger.info(String.format("Create new ColumnFamily: %s", cfm));
+        logger.info(String.format("Create new table: %s", cfm));
         announce(addSerializedKeyspace(cfm.toSchema(FBUtilities.timestampMicros()), cfm.ksName), announceLocally);
     }
 
@@ -287,11 +307,11 @@ public class MigrationManager
 
         CFMetaData oldCfm = Schema.instance.getCFMetaData(cfm.ksName, cfm.cfName);
         if (oldCfm == null)
-            throw new ConfigurationException(String.format("Cannot update non existing column family '%s' in keyspace '%s'.", cfm.cfName, cfm.ksName));
+            throw new ConfigurationException(String.format("Cannot update non existing table '%s' in keyspace '%s'.", cfm.cfName, cfm.ksName));
 
         oldCfm.validateCompatility(cfm);
 
-        logger.info(String.format("Update ColumnFamily '%s/%s' From %s To %s", cfm.ksName, cfm.cfName, oldCfm, cfm));
+        logger.info(String.format("Update table '%s/%s' From %s To %s", cfm.ksName, cfm.cfName, oldCfm, cfm));
         announce(addSerializedKeyspace(oldCfm.toSchemaUpdate(cfm, FBUtilities.timestampMicros(), fromThrift), cfm.ksName), announceLocally);
     }
 
@@ -329,9 +349,9 @@ public class MigrationManager
     {
         CFMetaData oldCfm = Schema.instance.getCFMetaData(ksName, cfName);
         if (oldCfm == null)
-            throw new ConfigurationException(String.format("Cannot drop non existing column family '%s' in keyspace '%s'.", cfName, ksName));
+            throw new ConfigurationException(String.format("Cannot drop non existing table '%s' in keyspace '%s'.", cfName, ksName));
 
-        logger.info(String.format("Drop ColumnFamily '%s/%s'", oldCfm.ksName, oldCfm.cfName));
+        logger.info(String.format("Drop table '%s/%s'", oldCfm.ksName, oldCfm.cfName));
         announce(addSerializedKeyspace(oldCfm.dropFromSchema(FBUtilities.timestampMicros()), ksName), announceLocally);
     }
 
@@ -352,6 +372,27 @@ public class MigrationManager
         announce(addSerializedKeyspace(UTMetaData.dropFromSchema(droppedType, FBUtilities.timestampMicros()), droppedType.keyspace), announceLocally);
     }
 
+    public static void announceFunctionDrop(String namespace, String functionName, boolean announceLocally) throws InvalidRequestException
+    {
+        Mutation mutation = UFMetaData.dropFunction(FBUtilities.timestampMicros(), namespace, functionName);
+        if (mutation == null)
+            throw new InvalidRequestException(String.format("Cannot drop non existing function '%s'.", functionName));
+
+        logger.info(String.format("Drop Function '%s::%s'", namespace, functionName));
+        announce(mutation, announceLocally);
+    }
+
+    public static void announceNewFunction(UFMetaData function, boolean announceLocally)
+        throws ConfigurationException
+    {
+        Mutation mutation = UFMetaData.createOrReplaceFunction(FBUtilities.timestampMicros(), function);
+        if (mutation == null)
+            throw new ConfigurationException(String.format("Function '%s' already exists.", function.qualifiedName));
+
+        logger.info(String.format("Create Function '%s'", function));
+        announce(mutation, announceLocally);
+    }
+
     /**
      * actively announce a new version to active hosts via rpc
      * @param schema The schema mutation to be applied
@@ -364,7 +405,7 @@ public class MigrationManager
             {
                 DefsTables.mergeSchemaInternal(Collections.singletonList(schema), false);
             }
-            catch (ConfigurationException | IOException e)
+            catch (IOException e)
             {
                 throw new RuntimeException(e);
             }

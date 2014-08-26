@@ -102,6 +102,11 @@
     <property name="cobertura.report.dir" value="${cobertura.build.dir}/report"/>
     <property name="cobertura.classes.dir" value="${cobertura.build.dir}/classes"/>
     <property name="cobertura.datafile" value="${cobertura.build.dir}/cobertura.ser"/>
+    
+    <!-- http://www.eclemma.org/jacoco/ -->
+    <property name="jacoco.export.dir" value="${build.dir}/jacoco/" />
+    <property name="jacoco.execfile" value="${jacoco.export.dir}/jacoco.exec" />
+    <property name="jacoco.version" value="0.7.1.201405082137"/>
 
     <condition property="maven-ant-tasks.jar.exists">
       <available file="${build.dir}/maven-ant-tasks-${maven-ant-tasks.version}.jar" />
@@ -167,6 +172,7 @@
         <mkdir dir="${test.classes}"/>
         <mkdir dir="${build.src.gen-java}"/>
         <mkdir dir="${build.dir.lib}"/>
+        <mkdir dir="${jacoco.export.dir}"/>
     </target>
 
     <target name="clean" description="Remove all locally created artifacts">
@@ -175,6 +181,7 @@
         <delete dir="${cobertura.classes.dir}" />
         <delete dir="${build.src.gen-java}" />
         <delete dir="${version.properties.dir}" />
+        <delete dir="${jacoco.export.dir}" />
     </target>
     <target depends="clean" name="cleanall"/>
 
@@ -194,7 +201,7 @@
     <target name="gen-cli-grammar" depends="check-gen-cli-grammar" unless="cliUpToDate">
       <echo>Building Grammar ${build.src.java}/org/apache/cassandra/cli/Cli.g  ....</echo>
       <java classname="org.antlr.Tool"
-            classpath="${build.lib}/antlr-3.2.jar"
+        classpath="${build.dir.lib}/jars/antlr-3.5.2.jar;${build.lib}/antlr-runtime-3.5.2.jar;${build.lib}/stringtemplate-4.0.2.jar"
             fork="true"
             failonerror="true">
          <jvmarg value="-Xmx512M" />
@@ -207,33 +214,16 @@
     <!--
        This generates the CQL grammar files from Cql.g
     -->
-    <target name="check-gen-cql2-grammar">
-        <uptodate property="cql2current"
-                srcfile="${build.src.java}/org/apache/cassandra/cql/Cql.g"
-                targetfile="${build.src.gen-java}/org/apache/cassandra/cql/Cql.tokens"/>
-    </target>
     <target name="check-gen-cql3-grammar">
         <uptodate property="cql3current"
                 srcfile="${build.src.java}/org/apache/cassandra/cql3/Cql.g"
                 targetfile="${build.src.gen-java}/org/apache/cassandra/cql3/Cql.tokens"/>
     </target>
  
-    <target name="gen-cql2-grammar" depends="check-gen-cql2-grammar" unless="cql2current">
-      <echo>Building Grammar ${build.src.java}/org/apache/cassandra/cql/Cql.g  ...</echo>
-      <java classname="org.antlr.Tool"
-            classpath="${build.lib}/antlr-3.2.jar"
-            fork="true"
-            failonerror="true">
-         <jvmarg value="-Xmx512M" />
-         <arg value="${build.src.java}/org/apache/cassandra/cql/Cql.g" />
-         <arg value="-fo" />
-         <arg value="${build.src.gen-java}/org/apache/cassandra/cql/" />
-      </java>
-    </target>
     <target name="gen-cql3-grammar" depends="check-gen-cql3-grammar" unless="cql3current">
       <echo>Building Grammar ${build.src.java}/org/apache/cassandra/cql3/Cql.g  ...</echo>
       <java classname="org.antlr.Tool"
-            classpath="${build.lib}/antlr-3.2.jar"
+            classpath="${build.dir.lib}/jars/antlr-3.5.2.jar;${build.lib}/antlr-runtime-3.5.2.jar;${build.lib}/stringtemplate-4.0.2.jar"
             fork="true"
             failonerror="true">
          <jvmarg value="-Xmx512M" />
@@ -252,9 +242,6 @@
         </artifact:dependencies>
         <taskdef classpathref="wikitext.classpath" resource="wikitexttasks.properties" />
         <wikitext-to-html markupLanguage="Textile">
-            <fileset dir="${basedir}">
-                <include name="doc/cql/*.textile"/>
-            </fileset>
             <fileset dir="${basedir}">
                 <include name="doc/cql3/*.textile"/>
             </fileset>
@@ -356,7 +343,9 @@
           <dependency groupId="org.apache.commons" artifactId="commons-lang3" version="3.1"/>
           <dependency groupId="org.apache.commons" artifactId="commons-math3" version="3.2"/>
           <dependency groupId="com.googlecode.concurrentlinkedhashmap" artifactId="concurrentlinkedhashmap-lru" version="1.3"/>
-          <dependency groupId="org.antlr" artifactId="antlr" version="3.2"/>
+          <dependency groupId="org.antlr" artifactId="antlr" version="3.5.2"/>
+          <dependency groupId="org.antlr" artifactId="antlr-runtime" version="3.5.2"/>
+          <dependency groupId="org.antlr" artifactId="stringtemplate" version="4.0.2"/>
           <dependency groupId="org.slf4j" artifactId="slf4j-api" version="1.7.2"/>
           <dependency groupId="ch.qos.logback" artifactId="logback-core" version="1.1.2"/>
           <dependency groupId="ch.qos.logback" artifactId="logback-classic" version="1.1.2"/>
@@ -389,6 +378,8 @@
           <dependency groupId="net.sourceforge.cobertura" artifactId="cobertura" version="${cobertura.version}">
             <exclusion groupId="xerces" artifactId="xercesImpl"/>
           </dependency>
+          <dependency groupId="org.jacoco" artifactId="org.jacoco.agent" version="${jacoco.version}"/>
+          <dependency groupId="org.jacoco" artifactId="org.jacoco.ant" version="${jacoco.version}"/>
 
           <dependency groupId="org.apache.cassandra" artifactId="cassandra-all" version="${version}" />
           <dependency groupId="org.apache.cassandra" artifactId="cassandra-thrift" version="${version}" />
@@ -443,6 +434,7 @@
       	<dependency groupId="org.apache.hadoop" artifactId="hadoop-minicluster"/>
         <dependency groupId="org.apache.pig" artifactId="pig"/>
       	<dependency groupId="com.google.code.findbugs" artifactId="jsr305"/>
+        <dependency groupId="org.antlr" artifactId="antlr"/>
         <dependency groupId="com.datastax.cassandra" artifactId="cassandra-driver-core"/>
 	<dependency groupId="net.ju-n.compile-command-annotations" artifactId="compile-command-annotations"/>
       </artifact:pom>
@@ -453,6 +445,8 @@
                 artifactId="cassandra-parent"
                 version="${version}"/>
         <dependency groupId="net.sourceforge.cobertura" artifactId="cobertura"/>
+        <dependency groupId="org.jacoco" artifactId="org.jacoco.agent"/>
+        <dependency groupId="org.jacoco" artifactId="org.jacoco.ant"/>
       </artifact:pom>
 
       <artifact:pom id="test-deps-pom"
@@ -485,6 +479,8 @@
         <dependency groupId="org.apache.commons" artifactId="commons-math3"/>
         <dependency groupId="com.googlecode.concurrentlinkedhashmap" artifactId="concurrentlinkedhashmap-lru"/>
         <dependency groupId="org.antlr" artifactId="antlr"/>
+        <dependency groupId="org.antlr" artifactId="antlr-runtime"/>
+        <dependency groupId="org.antlr" artifactId="stringtemplate" version="4.0.2"/>
         <dependency groupId="org.slf4j" artifactId="slf4j-api"/>
         <dependency groupId="org.codehaus.jackson" artifactId="jackson-core-asl"/>
         <dependency groupId="org.codehaus.jackson" artifactId="jackson-mapper-asl"/>
@@ -563,11 +559,6 @@
           <remoteRepository refid="apache"/>
           <remoteRepository refid="java.net2"/>
       </artifact:dependencies>
-      <artifact:dependencies pomRefId="coverage-deps-pom"
-                             pathId="cobertura.classpath">
-          <remoteRepository refid="central"/>
-      </artifact:dependencies>
-
       <copy todir="${build.dir.lib}/jars">
           <fileset refid="build-dependency-jars"/>
           <mapper type="flatten"/>
@@ -576,6 +567,23 @@
           <fileset refid="build-dependency-sources"/>
           <mapper type="flatten"/>
       </copy>
+      <!-- code coverage tools -->
+      <artifact:dependencies pomRefId="coverage-deps-pom"
+                             filesetId="coverage-dependency-jars"
+                             pathId="cobertura.classpath">
+          <remoteRepository refid="central"/>
+      </artifact:dependencies>
+      <copy todir="${build.dir.lib}/jars">
+          <fileset refid="coverage-dependency-jars"/>
+          <mapper type="flatten"/>
+      </copy>
+      <!-- jacoco agent jar comes wrapped in a jar -->
+      <unzip src="${build.dir.lib}/jars/org.jacoco.agent-${jacoco.version}.jar" dest="${build.dir.lib}/jars">
+        <patternset>
+            <include name="*.jar"/>
+        </patternset>
+        <mapper type="flatten"/>
+      </unzip>
     </target>
 
     <target name="maven-ant-tasks-retrieve-test" depends="maven-ant-tasks-init">
@@ -693,9 +701,9 @@
     -->
     <target name="build"
         depends="maven-ant-tasks-retrieve-build,build-project" description="Compile Cassandra classes"/>
-    <target name="codecoverage" depends="cobertura-instrument,test,cobertura-report" description="Create code coverage report"/>
+    <target name="codecoverage" depends="jacoco-run,jacoco-report" description="Create code coverage report"/>
 
-    <target depends="init,gen-cli-grammar,gen-cql2-grammar,gen-cql3-grammar"
+    <target depends="init,gen-cli-grammar,gen-cql3-grammar"
             name="build-project">
         <echo message="${ant.project.name}: ${ant.file}"/>
         <!-- Order matters! -->
@@ -712,8 +720,8 @@
                memorymaximumsize="512M">
             <src path="${build.src.java}"/>
             <src path="${build.src.gen-java}"/>
+        	<compilerarg value="-XDignore.symbol.file"/>
             <classpath refid="cassandra.classpath"/>
-            <compilerarg value="-XDignore.symbol.file"/>
         </javac>
         <antcall target="createVersionPropFile"/>
         <copy todir="${build.classes.main}">
@@ -1092,7 +1100,14 @@
     <attribute name="exclude" default="" />
     <attribute name="filelist" default="" />
     <attribute name="poffset" default="0"/>
+    
+    <attribute name="usejacoco" default="no"/>
     <sequential>
+      <condition property="additionalagent"
+                 value="-javaagent:${build.dir.lib}/jars/jacocoagent.jar=destfile=${jacoco.execfile}"
+                 else="">
+        <istrue value="${usejacoco}"/>
+      </condition>
       <echo message="running @{suitename} tests"/>
       <mkdir dir="${build.test.dir}/cassandra"/>
       <mkdir dir="${build.test.dir}/output"/>
@@ -1102,7 +1117,7 @@
         <formatter type="brief" usefile="false"/>
         <jvmarg value="-Dstorage-config=${test.conf}"/>
         <jvmarg value="-Djava.awt.headless=true"/>
-        <jvmarg value="-javaagent:${basedir}/lib/jamm-0.2.6.jar" />
+        <jvmarg line="-javaagent:${basedir}/lib/jamm-0.2.6.jar ${additionalagent}" />
         <jvmarg value="-ea"/>
         <jvmarg value="-Xss256k"/>
         <jvmarg value="-Dcassandra.memtable_row_overhead_computation_step=100"/>
@@ -1185,6 +1200,18 @@
       <jvmarg value="-Dcassandra.tolerate_sstable_size=true"/>
       <jvmarg value="-Dcassandra.config.loader=org.apache.cassandra.OffsetAwareConfigurationLoader"/>
     </testmacro>
+  </target>
+
+  <!--
+    Run named ant task with jacoco, such as "ant jacoco-run -Dtaskname=pig-test"
+    the target run must enable the jacoco agent if usejacoco is 'yes' -->
+  <target name="jacoco-run" description="run named task with jacoco instrumentation">
+    <condition property="runtask" value="${taskname}" else="test">
+      <isset property="taskname"/>
+    </condition>
+    <antcall target="${runtask}">
+      <param name="usejacoco" value="yes"/>
+    </antcall>
   </target>
 
   <target name="testsome" depends="build-test" description="Execute specific unit tests" >
@@ -1326,6 +1353,44 @@
   <target name="test-all" 
           depends="test,long-test,test-compression,pig-test,test-clientutil-jar" 
           description="Run all tests" />
+  
+  <!-- Use JaCoCo ant extension without needing externally saved lib -->
+  <target name="jacoco-init" depends="maven-ant-tasks-init">
+    <artifact:dependencies pathId="jacocoant.classpath">
+      <dependency groupId="org.jacoco" artifactId="org.jacoco.ant" version="${jacoco.version}" />
+    </artifact:dependencies>
+    <typedef uri="antlib:org.jacoco.ant" classpathref="jacocoant.classpath"/>
+  </target>
+
+  <target name="jacoco-report" depends="jacoco-init">
+    <jacoco:report xmlns:jacoco="antlib:org.jacoco.ant">
+      <executiondata>
+        <file file="${jacoco.execfile}" />
+      </executiondata>
+      <structure name="JaCoCo Cassandara Coverage Report">
+        <classfiles>
+          <fileset dir="${build.classes.main}">
+            <include name="**/*.class"/>
+          </fileset>
+        </classfiles>
+        <sourcefiles encoding="UTF-8">
+          <dirset dir="${build.src}">
+            <include name="java"/>
+            <include name="gen-java"/>
+          </dirset>
+        </sourcefiles>
+      </structure>
+      <!-- to produce reports in different formats. -->
+      <html destdir="${jacoco.export.dir}" />
+      <csv destfile="${jacoco.export.dir}/report.csv" />
+      <xml destfile="${jacoco.export.dir}/report.xml" />
+    </jacoco:report>
+  </target>
+
+  <target name="jacoco-cleanup" description="Destroy JaCoCo exec data and reports">
+    <delete file="${jacoco.execfile}"/>
+    <delete dir="${jacoco.export.dir}"/>
+  </target>
 
   <!-- instruments the classes to later create code coverage reports -->
   <target name="cobertura-instrument" depends="build,build-test">
@@ -1396,7 +1461,7 @@
     </java>
   </target>
 
-  <target name="javadoc" depends="init" description="Create javadoc">
+  <target name="javadoc" depends="init" description="Create javadoc" unless="no-javadoc">
     <create-javadoc destdir="${javadoc.dir}">
       <filesets>
       <fileset dir="${build.src.java}" defaultexcludes="yes">

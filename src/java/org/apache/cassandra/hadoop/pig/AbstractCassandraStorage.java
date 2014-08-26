@@ -25,8 +25,6 @@ import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.util.*;
 
-import com.google.common.collect.Iterables;
-
 import org.apache.cassandra.db.Cell;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.exceptions.SyntaxException;
@@ -530,7 +528,7 @@ public abstract class AbstractCassandraStorage extends LoadFunc implements Store
                     properties.setProperty(signature, sb.toString());
                 }
                 else
-                    throw new IOException(String.format("Column family '%s' not found in keyspace '%s'",
+                    throw new IOException(String.format("Table '%s' not found in keyspace '%s'",
                                                              column_family,
                                                              keyspace));
             }

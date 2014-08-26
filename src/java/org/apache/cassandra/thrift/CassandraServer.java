@@ -18,7 +18,6 @@
 package org.apache.cassandra.thrift;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.StandardCharsets;
@@ -45,8 +44,6 @@ import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.config.DatabaseDescriptor;
 import org.apache.cassandra.config.KSMetaData;
 import org.apache.cassandra.config.Schema;
-import org.apache.cassandra.cql.CQLStatement;
-import org.apache.cassandra.cql.QueryProcessor;
 import org.apache.cassandra.cql3.QueryOptions;
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.composites.*;
@@ -72,7 +69,6 @@ import org.apache.cassandra.service.pager.QueryPagers;
 import org.apache.cassandra.tracing.Tracing;
 import org.apache.cassandra.utils.ByteBufferUtil;
 import org.apache.cassandra.utils.Pair;
-import org.apache.cassandra.utils.SemanticVersion;
 import org.apache.cassandra.utils.UUIDGen;
 import org.apache.thrift.TException;
 
@@ -83,8 +79,6 @@ public class CassandraServer implements Cassandra.Iface
     private final static int COUNT_PAGE_SIZE = 1024;
 
     private final static List<ColumnOrSuperColumn> EMPTY_COLUMNS = Collections.emptyList();
-
-    private volatile boolean loggedCQL2Warning = false;
 
     /*
      * RequestScheduler to perform the scheduling of incoming requests
@@ -1641,7 +1635,7 @@ public class CassandraServer implements Cassandra.Iface
             state().hasKeyspaceAccess(ks_def.name, Permission.ALTER);
             ThriftValidation.validateKeyspace(ks_def.name);
             if (ks_def.getCf_defs() != null && ks_def.getCf_defs().size() > 0)
-                throw new InvalidRequestException("Keyspace update must not contain any column family definitions.");
+                throw new InvalidRequestException("Keyspace update must not contain any table definitions.");
 
             MigrationManager.announceKeyspaceUpdate(KSMetaData.fromThrift(ks_def));
             return Schema.instance.getVersion().toString();
@@ -1666,7 +1660,7 @@ public class CassandraServer implements Cassandra.Iface
             CFMetaData oldCfm = Schema.instance.getCFMetaData(cf_def.keyspace, cf_def.name);
 
             if (oldCfm == null)
-                throw new InvalidRequestException("Could not find column family definition to modify.");
+                throw new InvalidRequestException("Could not find table definition to modify.");
 
             if (!oldCfm.isThriftCompatible())
                 throw new InvalidRequestException("Cannot modify CQL3 table " + oldCfm.cfName + " as it may break the schema. You should use cqlsh to modify CQL3 tables instead.");
@@ -1896,67 +1890,13 @@ public class CassandraServer implements Cassandra.Iface
         return queryString;
     }
 
-    private void validateCQLVersion(int major) throws InvalidRequestException
+    public CqlResult execute_cql_query(ByteBuffer query, Compression compression) throws TException
     {
-        /*
-         * The rules are:
-         *   - If no version are set, we don't validate anything. The reason is
-         *     that 1) old CQL2 client might not have called set_cql_version
-         *     and 2) some client may have removed the set_cql_version for CQL3
-         *     when updating to 1.2.0. A CQL3 client upgrading from pre-1.2
-         *     shouldn't be in that case however since set_cql_version uses to
-         *     be mandatory (for CQL3).
-         *   - Otherwise, checks the major matches whatever was set.
-         */
-        SemanticVersion versionSet = state().getCQLVersion();
-        if (versionSet == null)
-            return;
-
-        if (versionSet.major != major)
-            throw new InvalidRequestException(
-                "Cannot execute/prepare CQL" + major + " statement since the CQL has been set to CQL" + versionSet.major
-              + "(This might mean your client hasn't been upgraded correctly to use the new CQL3 methods introduced in Cassandra 1.2+).");
+        throw new InvalidRequestException("CQL2 has been removed in Cassandra 3.0. Please use CQL3 instead");
     }
 
-    public CqlResult execute_cql_query(ByteBuffer query, Compression compression)
-    throws InvalidRequestException, UnavailableException, TimedOutException, SchemaDisagreementException, TException
+    public CqlResult execute_cql3_query(ByteBuffer query, Compression compression, ConsistencyLevel cLevel) throws TException
     {
-        validateCQLVersion(2);
-        maybeLogCQL2Warning();
-
-        try
-        {
-            String queryString = uncompress(query, compression);
-            if (startSessionIfRequested())
-            {
-                Tracing.instance.begin("execute_cql_query",
-                                       ImmutableMap.of("query", queryString));
-            }
-            else
-            {
-                logger.debug("execute_cql_query");
-            }
-
-            return QueryProcessor.process(queryString, state());
-        }
-        catch (RequestExecutionException e)
-        {
-            throw ThriftConversion.rethrow(e);
-        }
-        catch (RequestValidationException e)
-        {
-            throw ThriftConversion.toThrift(e);
-        }
-        finally
-        {
-            Tracing.instance.stopSession();
-        }
-    }
-
-    public CqlResult execute_cql3_query(ByteBuffer query, Compression compression, ConsistencyLevel cLevel)
-    throws InvalidRequestException, UnavailableException, TimedOutException, SchemaDisagreementException, TException
-    {
-        validateCQLVersion(3);
         try
         {
             String queryString = uncompress(query, compression);
@@ -1987,36 +1927,14 @@ public class CassandraServer implements Cassandra.Iface
         }
     }
 
-    public CqlPreparedResult prepare_cql_query(ByteBuffer query, Compression compression)
-    throws InvalidRequestException, TException
+    public CqlPreparedResult prepare_cql_query(ByteBuffer query, Compression compression) throws TException
     {
-        if (logger.isDebugEnabled())
-            logger.debug("prepare_cql_query");
-
-        validateCQLVersion(2);
-        maybeLogCQL2Warning();
-
-        String queryString = uncompress(query, compression);
-        ThriftClientState cState = state();
-
-        try
-        {
-            cState.validateLogin();
-            return QueryProcessor.prepare(queryString, cState);
-        }
-        catch (RequestValidationException e)
-        {
-            throw ThriftConversion.toThrift(e);
-        }
+        throw new InvalidRequestException("CQL2 has been removed in Cassandra 3.0. Please use CQL3 instead");
     }
 
-    public CqlPreparedResult prepare_cql3_query(ByteBuffer query, Compression compression)
-    throws InvalidRequestException, TException
+    public CqlPreparedResult prepare_cql3_query(ByteBuffer query, Compression compression) throws TException
     {
-        if (logger.isDebugEnabled())
-            logger.debug("prepare_cql3_query");
-
-        validateCQLVersion(3);
+        logger.debug("prepare_cql3_query");
 
         String queryString = uncompress(query, compression);
         ThriftClientState cState = state();
@@ -2032,125 +1950,13 @@ public class CassandraServer implements Cassandra.Iface
         }
     }
 
-    @Override
-    public List<ColumnOrSuperColumn> get_multi_slice(MultiSliceRequest request)
-            throws InvalidRequestException, UnavailableException, TimedOutException
+    public CqlResult execute_prepared_cql_query(int itemId, List<ByteBuffer> bindVariables) throws TException
     {
-        if (startSessionIfRequested())
-        {
-            Map<String, String> traceParameters = ImmutableMap.of("key", ByteBufferUtil.bytesToHex(request.key),
-                                                                  "column_parent", request.column_parent.toString(),
-                                                                  "consistency_level", request.consistency_level.name(),
-                                                                  "count", String.valueOf(request.count),
-                                                                  "column_slices", request.column_slices.toString());
-            Tracing.instance.begin("get_multi_slice", traceParameters);
-        }
-        else
-        {
-            logger.debug("get_multi_slice");
-        }
-        try
-        {
-            ClientState cState = state();
-            String keyspace = cState.getKeyspace();
-            state().hasColumnFamilyAccess(keyspace, request.getColumn_parent().column_family, Permission.SELECT);
-            CFMetaData metadata = ThriftValidation.validateColumnFamily(keyspace, request.getColumn_parent().column_family);
-            if (metadata.cfType == ColumnFamilyType.Super)
-                throw new org.apache.cassandra.exceptions.InvalidRequestException("get_multi_slice does not support super columns");
-            ThriftValidation.validateColumnParent(metadata, request.getColumn_parent());
-            org.apache.cassandra.db.ConsistencyLevel consistencyLevel = ThriftConversion.fromThrift(request.getConsistency_level());
-            consistencyLevel.validateForRead(keyspace);
-            List<ReadCommand> commands = new ArrayList<>(1);
-            ColumnSlice[] slices = new ColumnSlice[request.getColumn_slices().size()];
-            for (int i = 0 ; i < request.getColumn_slices().size() ; i++)
-            {
-                fixOptionalSliceParameters(request.getColumn_slices().get(i));
-                Composite start = metadata.comparator.fromByteBuffer(request.getColumn_slices().get(i).start);
-                Composite finish = metadata.comparator.fromByteBuffer(request.getColumn_slices().get(i).finish);
-                if (!start.isEmpty() && !finish.isEmpty())
-                {
-                    int compare = metadata.comparator.compare(start, finish);
-                    if (!request.reversed && compare > 0)
-                        throw new InvalidRequestException(String.format("Column slice at index %d had start greater than finish", i));
-                    else if (request.reversed && compare < 0)
-                        throw new InvalidRequestException(String.format("Reversed column slice at index %d had start less than finish", i));
-                }
-                slices[i] = new ColumnSlice(start, finish);
-            }
-
-            ColumnSlice[] deoverlapped = ColumnSlice.deoverlapSlices(slices, request.reversed ? metadata.comparator.reverseComparator() : metadata.comparator);
-            SliceQueryFilter filter = new SliceQueryFilter(deoverlapped, request.reversed, request.count);
-            ThriftValidation.validateKey(metadata, request.key);
-            commands.add(ReadCommand.create(keyspace, request.key, request.column_parent.getColumn_family(), System.currentTimeMillis(), filter));
-            return getSlice(commands, request.column_parent.isSetSuper_column(), consistencyLevel).entrySet().iterator().next().getValue();
-        }
-        catch (RequestValidationException e)
-        {
-            throw ThriftConversion.toThrift(e);
-        }
-        finally
-        {
-            Tracing.instance.stopSession();
-        }
+        throw new InvalidRequestException("CQL2 has been removed in Cassandra 3.0. Please use CQL3 instead");
     }
 
-    /**
-     * Set the to start-of end-of value of "" for start and finish.
-     * @param columnSlice
-     */
-    private static void fixOptionalSliceParameters(org.apache.cassandra.thrift.ColumnSlice columnSlice) {
-        if (!columnSlice.isSetStart())
-            columnSlice.setStart(new byte[0]);
-        if (!columnSlice.isSetFinish())
-            columnSlice.setFinish(new byte[0]);
-    }
-
-    public CqlResult execute_prepared_cql_query(int itemId, List<ByteBuffer> bindVariables)
-    throws InvalidRequestException, UnavailableException, TimedOutException, SchemaDisagreementException, TException
+    public CqlResult execute_prepared_cql3_query(int itemId, List<ByteBuffer> bindVariables, ConsistencyLevel cLevel) throws TException
     {
-        validateCQLVersion(2);
-        maybeLogCQL2Warning();
-
-        if (startSessionIfRequested())
-        {
-            // TODO we don't have [typed] access to CQL bind variables here.  CASSANDRA-4560 is open to add support.
-            Tracing.instance.begin("execute_prepared_cql_query", Collections.<String, String>emptyMap());
-        }
-        else
-        {
-            logger.debug("execute_prepared_cql_query");
-        }
-
-        try
-        {
-            ThriftClientState cState = state();
-            CQLStatement statement = cState.getPrepared().get(itemId);
-
-            if (statement == null)
-                throw new InvalidRequestException(String.format("Prepared query with ID %d not found", itemId));
-            logger.trace("Retrieved prepared statement #{} with {} bind markers", itemId, statement.boundTerms);
-
-            return QueryProcessor.processPrepared(statement, cState, bindVariables);
-        }
-        catch (RequestExecutionException e)
-        {
-            throw ThriftConversion.rethrow(e);
-        }
-        catch (RequestValidationException e)
-        {
-            throw ThriftConversion.toThrift(e);
-        }
-        finally
-        {
-            Tracing.instance.stopSession();
-        }
-    }
-
-    public CqlResult execute_prepared_cql3_query(int itemId, List<ByteBuffer> bindVariables, ConsistencyLevel cLevel)
-    throws InvalidRequestException, UnavailableException, TimedOutException, SchemaDisagreementException, TException
-    {
-        validateCQLVersion(3);
-
         if (startSessionIfRequested())
         {
             // TODO we don't have [typed] access to CQL bind variables here.  CASSANDRA-4560 is open to add support.
@@ -2191,32 +1997,83 @@ public class CassandraServer implements Cassandra.Iface
         }
     }
 
-    /*
-     * Deprecated, but if a client sets CQL2, it is a no-op for compatibility sake.
-     * If it sets CQL3 however, we throw an IRE because this mean the client
-     * hasn't been updated for Cassandra 1.2 and should start using the new
-     * execute_cql3_query, etc... and there is no point no warning it early.
-     */
-    public void set_cql_version(String version) throws InvalidRequestException
+    @Override
+    public List<ColumnOrSuperColumn> get_multi_slice(MultiSliceRequest request)
+            throws InvalidRequestException, UnavailableException, TimedOutException
     {
-        try
+        if (startSessionIfRequested())
         {
-            state().setCQLVersion(version);
+            Map<String, String> traceParameters = ImmutableMap.of("key", ByteBufferUtil.bytesToHex(request.key),
+                                                                  "column_parent", request.column_parent.toString(),
+                                                                  "consistency_level", request.consistency_level.name(),
+                                                                  "count", String.valueOf(request.count),
+                                                                  "column_slices", request.column_slices.toString());
+            Tracing.instance.begin("get_multi_slice", traceParameters);
         }
-        catch (org.apache.cassandra.exceptions.InvalidRequestException e)
+        else
         {
-            throw new InvalidRequestException(e.getMessage());
+            logger.debug("get_multi_slice");
+        }
+        try 
+        {
+            ClientState cState = state();
+            String keyspace = cState.getKeyspace();
+            state().hasColumnFamilyAccess(keyspace, request.getColumn_parent().column_family, Permission.SELECT);
+            CFMetaData metadata = ThriftValidation.validateColumnFamily(keyspace, request.getColumn_parent().column_family);
+            if (metadata.cfType == ColumnFamilyType.Super)
+                throw new org.apache.cassandra.exceptions.InvalidRequestException("get_multi_slice does not support super columns");
+            ThriftValidation.validateColumnParent(metadata, request.getColumn_parent());
+            org.apache.cassandra.db.ConsistencyLevel consistencyLevel = ThriftConversion.fromThrift(request.getConsistency_level());
+            consistencyLevel.validateForRead(keyspace);
+            List<ReadCommand> commands = new ArrayList<>(1);
+            ColumnSlice[] slices = new ColumnSlice[request.getColumn_slices().size()];
+            for (int i = 0 ; i < request.getColumn_slices().size() ; i++)
+            {
+                fixOptionalSliceParameters(request.getColumn_slices().get(i));
+                Composite start = metadata.comparator.fromByteBuffer(request.getColumn_slices().get(i).start);
+                Composite finish = metadata.comparator.fromByteBuffer(request.getColumn_slices().get(i).finish);
+                if (!start.isEmpty() && !finish.isEmpty())
+                {
+                    int compare = metadata.comparator.compare(start, finish);
+                    if (!request.reversed && compare > 0)
+                        throw new InvalidRequestException(String.format("Column slice at index %d had start greater than finish", i));
+                    else if (request.reversed && compare < 0)
+                        throw new InvalidRequestException(String.format("Reversed column slice at index %d had start less than finish", i));
+                }
+                slices[i] = new ColumnSlice(start, finish);
+            }
+            ColumnSlice[] deoverlapped = ColumnSlice.deoverlapSlices(slices, request.reversed ? metadata.comparator.reverseComparator() : metadata.comparator);
+            SliceQueryFilter filter = new SliceQueryFilter(deoverlapped, request.reversed, request.count);
+            ThriftValidation.validateKey(metadata, request.key);
+            commands.add(ReadCommand.create(keyspace, request.key, request.column_parent.getColumn_family(), System.currentTimeMillis(), filter));
+            return getSlice(commands, request.column_parent.isSetSuper_column(), consistencyLevel).entrySet().iterator().next().getValue();
+        } 
+        catch (RequestValidationException e)
+        {
+            throw ThriftConversion.toThrift(e);
+        } 
+        finally 
+        {
+            Tracing.instance.stopSession();
         }
     }
 
-    private void maybeLogCQL2Warning()
+    /**
+     * Set the to start-of end-of value of "" for start and finish.
+     * @param columnSlice
+     */
+    private static void fixOptionalSliceParameters(org.apache.cassandra.thrift.ColumnSlice columnSlice) {
+        if (!columnSlice.isSetStart())
+            columnSlice.setStart(new byte[0]);
+        if (!columnSlice.isSetFinish())
+            columnSlice.setFinish(new byte[0]);
+    }
+
+    /*
+     * No-op since 3.0.
+     */
+    public void set_cql_version(String version)
     {
-        if (!loggedCQL2Warning)
-        {
-            logger.warn("CQL2 has been deprecated since Cassandra 2.0, and will be removed entirely in version 2.2."
-                        + " Please switch to CQL3 before then.");
-            loggedCQL2Warning = true;
-        }
     }
 
     public ByteBuffer trace_next_query() throws TException

@@ -35,12 +35,13 @@ import org.apache.cassandra.db.composites.CellName;
 import org.apache.cassandra.db.composites.Composite;
 import org.apache.cassandra.db.filter.ColumnSlice;
 import org.apache.cassandra.utils.ObjectSizes;
+import org.apache.cassandra.utils.SearchIterator;
 import org.apache.cassandra.utils.btree.BTree;
+import org.apache.cassandra.utils.btree.BTreeSearchIterator;
 import org.apache.cassandra.utils.btree.UpdateFunction;
 import org.apache.cassandra.utils.concurrent.OpOrder;
 import org.apache.cassandra.utils.memory.HeapAllocator;
 import org.apache.cassandra.utils.memory.MemtableAllocator;
-import org.apache.cassandra.utils.memory.NativeAllocator;
 import org.apache.cassandra.utils.memory.NativePool;
 
 import static org.apache.cassandra.db.index.SecondaryIndexManager.Updater;
@@ -120,6 +121,11 @@ public class AtomicBTreeColumns extends ColumnFamily
     protected void delete(RangeTombstone tombstone)
     {
         delete(new DeletionInfo(tombstone, getComparator()));
+    }
+
+    public SearchIterator<CellName, Cell> searchIterator()
+    {
+        return new BTreeSearchIterator<>(ref.tree, asymmetricComparator());
     }
 
     public void delete(DeletionInfo info)

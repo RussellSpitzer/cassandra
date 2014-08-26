@@ -27,8 +27,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 
-import io.netty.buffer.ByteBufAllocator;
-import io.netty.buffer.PooledByteBufAllocator;
 import io.netty.util.Version;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -390,6 +388,10 @@ public class Server implements CassandraDaemon.Server
             server.connectionTracker.send(new Event.SchemaChange(Event.SchemaChange.Change.CREATED, Event.SchemaChange.Target.TYPE, ksName, typeName));
         }
 
+        public void onCreateFunction(String namespace, String functionName)
+        {
+        }
+
         public void onUpdateKeyspace(String ksName)
         {
             server.connectionTracker.send(new Event.SchemaChange(Event.SchemaChange.Change.UPDATED, ksName));
@@ -405,6 +407,10 @@ public class Server implements CassandraDaemon.Server
             server.connectionTracker.send(new Event.SchemaChange(Event.SchemaChange.Change.UPDATED, Event.SchemaChange.Target.TYPE, ksName, typeName));
         }
 
+        public void onUpdateFunction(String namespace, String functionName)
+        {
+        }
+
         public void onDropKeyspace(String ksName)
         {
             server.connectionTracker.send(new Event.SchemaChange(Event.SchemaChange.Change.DROPPED, ksName));
@@ -418,6 +424,10 @@ public class Server implements CassandraDaemon.Server
         public void onDropUserType(String ksName, String typeName)
         {
             server.connectionTracker.send(new Event.SchemaChange(Event.SchemaChange.Change.DROPPED, Event.SchemaChange.Target.TYPE, ksName, typeName));
+        }
+
+        public void onDropFunction(String namespace, String functionName)
+        {
         }
     }
 }

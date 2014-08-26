@@ -214,6 +214,19 @@ public final class CFMetaData
                                                                + "PRIMARY KEY (keyspace_name, type_name)"
                                                                + ") WITH COMMENT='Defined user types' AND gc_grace_seconds=604800");
 
+    public static final CFMetaData SchemaFunctionsCf = compile("CREATE TABLE " + SystemKeyspace.SCHEMA_FUNCTIONS_CF + " ("
+                                                               + "namespace text,"
+                                                               + "name text,"
+                                                               + "signature text,"
+                                                               + "argument_names list<text>,"
+                                                               + "argument_types list<text>,"
+                                                               + "return_type text,"
+                                                               + "deterministic boolean,"
+                                                               + "language text,"
+                                                               + "body text,"
+                                                               + "primary key ((namespace, name), signature)"
+                                                               + ") WITH COMMENT='user defined functions' AND gc_grace_seconds=604800");
+
     public static final CFMetaData HintsCf = compile("CREATE TABLE " + SystemKeyspace.HINTS_CF + " ("
                                                      + "target_id uuid,"
                                                      + "hint_id timeuuid,"
@@ -332,7 +345,6 @@ public final class CFMetaData
                                                                  + "rows_merged map<int, bigint>,"
                                                                  + "PRIMARY KEY (id)"
                                                                  + ") WITH COMMENT='show all compaction history' AND DEFAULT_TIME_TO_LIVE=604800");
-
 
     public static class SpeculativeRetry
     {
@@ -736,17 +748,6 @@ public final class CFMetaData
     public Integer getMaxCompactionThreshold()
     {
         return maxCompactionThreshold;
-    }
-
-    // Used by CQL2 only.
-    public String getCQL2KeyName()
-    {
-        if (partitionKeyColumns.size() > 1)
-            throw new IllegalStateException("Cannot acces column family with composite key from CQL < 3.0.0");
-
-        // For compatibility sake, we uppercase if it's the default alias as we used to return it that way in resultsets.
-        String str = partitionKeyColumns.get(0).name.toString();
-        return str.equalsIgnoreCase(DEFAULT_KEY_ALIAS) ? str.toUpperCase() : str;
     }
 
     public CompressionParameters compressionParameters()
@@ -2228,6 +2229,11 @@ public final class CFMetaData
             if (def.kind == ColumnDefinition.Kind.REGULAR && !def.isThriftCompatible())
                 return false;
         }
+
+        // The table might also have no REGULAR columns (be PK-only), but still be "thrift incompatible". See #7832.
+        if (isCQL3OnlyPKComparator(comparator.asAbstractType()) && !isDense)
+            return false;
+
         return true;
     }
 

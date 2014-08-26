@@ -78,7 +78,11 @@ public abstract class SchemaAlteringStatement extends CFStatement implements CQL
         // If an IF [NOT] EXISTS clause was used, this may not result in an actual schema change.  To avoid doing
         // extra work in the drivers to handle schema changes, we return an empty message in this case. (CASSANDRA-7600)
         boolean didChangeSchema = announceMigration(false);
-        return didChangeSchema ? new ResultMessage.SchemaChange(changeEvent()) : new ResultMessage.Void();
+        if (!didChangeSchema)
+            return new ResultMessage.Void();
+
+        Event.SchemaChange ce = changeEvent();
+        return ce == null ? new ResultMessage.Void() : new ResultMessage.SchemaChange(ce);
     }
 
     public ResultMessage executeInternal(QueryState state, QueryOptions options)
@@ -86,7 +90,11 @@ public abstract class SchemaAlteringStatement extends CFStatement implements CQL
         try
         {
             boolean didChangeSchema = announceMigration(true);
-            return didChangeSchema ? new ResultMessage.SchemaChange(changeEvent()) : new ResultMessage.Void();
+            if (!didChangeSchema)
+                return new ResultMessage.Void();
+
+            Event.SchemaChange ce = changeEvent();
+            return ce == null ? new ResultMessage.Void() : new ResultMessage.SchemaChange(ce);
         }
         catch (RequestValidationException e)
         {

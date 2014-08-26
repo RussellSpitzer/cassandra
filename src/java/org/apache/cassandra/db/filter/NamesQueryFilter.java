@@ -40,6 +40,7 @@ import org.apache.cassandra.io.IVersionedSerializer;
 import org.apache.cassandra.io.sstable.SSTableReader;
 import org.apache.cassandra.io.util.DataOutputPlus;
 import org.apache.cassandra.io.util.FileDataInput;
+import org.apache.cassandra.utils.SearchIterator;
 
 public class NamesQueryFilter implements IDiskAtomFilter
 {
@@ -191,21 +192,23 @@ public class NamesQueryFilter implements IDiskAtomFilter
     {
         private final ColumnFamily cf;
         private final DecoratedKey key;
-        private final Iterator<CellName> iter;
+        private final Iterator<CellName> names;
+        private final SearchIterator<CellName, Cell> cells;
 
-        public ByNameColumnIterator(Iterator<CellName> iter, DecoratedKey key, ColumnFamily cf)
+        public ByNameColumnIterator(Iterator<CellName> names, DecoratedKey key, ColumnFamily cf)
         {
-            this.iter = iter;
+            this.names = names;
             this.cf = cf;
             this.key = key;
+            this.cells = cf.searchIterator();
         }
 
         protected OnDiskAtom computeNext()
         {
-            while (iter.hasNext())
+            while (names.hasNext() && cells.hasNext())
             {
-                CellName current = iter.next();
-                Cell cell = cf.getColumn(current);
+                CellName current = names.next();
+                Cell cell = cells.next(current);
                 if (cell != null)
                     return cell;
             }
@@ -248,7 +251,7 @@ public class NamesQueryFilter implements IDiskAtomFilter
         public NamesQueryFilter deserialize(DataInput in, int version) throws IOException
         {
             int size = in.readInt();
-            SortedSet<CellName> columns = new TreeSet<CellName>(type);
+            SortedSet<CellName> columns = new TreeSet<>(type);
             ISerializer<CellName> serializer = type.cellSerializer();
             for (int i = 0; i < size; ++i)
                 columns.add(serializer.deserialize(in));
@@ -271,7 +274,7 @@ public class NamesQueryFilter implements IDiskAtomFilter
     public Iterator<RangeTombstone> getRangeTombstoneIterator(final ColumnFamily source)
     {
         if (!source.deletionInfo().hasRanges())
-            return Iterators.<RangeTombstone>emptyIterator();
+            return Iterators.emptyIterator();
 
         return new AbstractIterator<RangeTombstone>()
         {

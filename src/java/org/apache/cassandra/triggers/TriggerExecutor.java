@@ -27,9 +27,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 
 import org.apache.cassandra.config.TriggerDefinition;
-import org.apache.cassandra.cql.QueryProcessor;
+import org.apache.cassandra.cql3.QueryProcessor;
 import org.apache.cassandra.db.*;
-import org.apache.cassandra.db.composites.CellName;
 import org.apache.cassandra.db.marshal.AbstractType;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.utils.FBUtilities;
@@ -151,7 +150,7 @@ public class TriggerExecutor
             for (ColumnFamily cf : mutation.getColumnFamilies())
             {
                 if (! cf.id().equals(cfId))
-                    throw new InvalidRequestException("Column family of additional mutation does not match primary update cf");
+                    throw new InvalidRequestException("table of additional mutation does not match primary update table");
             }
         }
         validate(tmutations);
@@ -163,8 +162,8 @@ public class TriggerExecutor
         {
             QueryProcessor.validateKey(mutation.key());
             for (ColumnFamily tcf : mutation.getColumnFamilies())
-                for (CellName tName : tcf.getColumnNames())
-                    QueryProcessor.validateColumn(tcf.metadata(), tName, tcf.getColumn(tName).value());
+                for (Cell cell : tcf)
+                    cell.validateFields(tcf.metadata());
         }
     }
 
@@ -197,7 +196,7 @@ public class TriggerExecutor
         }
         catch (Exception ex)
         {
-            throw new RuntimeException(String.format("Exception while creating trigger on CF with ID: %s", columnFamily.id()), ex);
+            throw new RuntimeException(String.format("Exception while creating trigger on table with ID: %s", columnFamily.id()), ex);
         }
         finally
         {

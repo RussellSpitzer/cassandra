@@ -20,12 +20,13 @@ package org.apache.cassandra.cql3.statements;
 import java.nio.ByteBuffer;
 import java.util.*;
 
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Multimap;
 import org.apache.cassandra.cql3.*;
 import org.apache.cassandra.config.CFMetaData;
 import org.apache.cassandra.db.*;
 import org.apache.cassandra.db.composites.Composite;
 import org.apache.cassandra.db.filter.*;
-import org.apache.cassandra.db.marshal.CompositeType;
 import org.apache.cassandra.exceptions.InvalidRequestException;
 import org.apache.cassandra.service.CASRequest;
 import org.apache.cassandra.utils.Pair;
@@ -80,7 +81,7 @@ public class CQL3CasRequest implements CASRequest
     {
         RowCondition previous = conditions.put(prefix, new ExistCondition(prefix, now));
         // this should be prevented by the parser, but it doesn't hurt to check
-        if (previous != null && previous instanceof NotExistCondition)
+        if (previous instanceof NotExistCondition)
             throw new InvalidRequestException("Cannot mix IF EXISTS and IF NOT EXISTS conditions for the same row");
     }
 
@@ -111,6 +112,7 @@ public class CQL3CasRequest implements CASRequest
             slices[i++] = prefix.slice();
 
         int toGroup = cfm.comparator.isDense() ? -1 : cfm.clusteringColumns().size();
+        slices = ColumnSlice.deoverlapSlices(slices, cfm.comparator);
         assert ColumnSlice.validateSlices(slices, cfm.comparator, false);
         return new SliceQueryFilter(slices, false, slices.length, toGroup);
     }
@@ -233,7 +235,7 @@ public class CQL3CasRequest implements CASRequest
 
     private static class ColumnsConditions extends RowCondition
     {
-        private final Map<Pair<ColumnIdentifier, ByteBuffer>, ColumnCondition.Bound> conditions = new HashMap<>();
+        private final Multimap<Pair<ColumnIdentifier, ByteBuffer>, ColumnCondition.Bound> conditions = HashMultimap.create();
 
         private ColumnsConditions(Composite rowPrefix, long now)
         {
@@ -244,13 +246,8 @@ public class CQL3CasRequest implements CASRequest
         {
             for (ColumnCondition condition : conds)
             {
-                // We will need the variables in appliesTo but with protocol batches, each condition in this object can have a
-                // different list of variables.
                 ColumnCondition.Bound current = condition.bind(options);
-                ColumnCondition.Bound previous = conditions.put(Pair.create(condition.column.name, current.getCollectionElementValue()), current);
-                // If 2 conditions are actually equal, let it slide
-                if (previous != null && !previous.equals(current))
-                    throw new InvalidRequestException("Duplicate and incompatible conditions for column " + condition.column.name);
+                conditions.put(Pair.create(condition.column.name, current.getCollectionElementValue()), current);
             }
         }
 

@@ -31,7 +31,6 @@ import org.apache.cassandra.cql3.statements.CFPropDefs;
 import org.apache.cassandra.db.ColumnFamilyStore;
 import org.apache.cassandra.exceptions.ConfigurationException;
 import org.apache.cassandra.io.sstable.SSTableReader;
-import org.apache.cassandra.service.ActiveRepairService;
 import org.apache.cassandra.utils.Pair;
 
 public class SizeTieredCompactionStrategy extends AbstractCompactionStrategy
@@ -242,7 +241,7 @@ public class SizeTieredCompactionStrategy extends AbstractCompactionStrategy
 
     private static Map<SSTableReader, Double> getHotnessMap(Collection<SSTableReader> sstables)
     {
-        Map<SSTableReader, Double> hotness = new HashMap<>();
+        Map<SSTableReader, Double> hotness = new HashMap<>(sstables.size());
         for (SSTableReader sstable : sstables)
             hotness.put(sstable, hotness(sstable));
         return hotness;

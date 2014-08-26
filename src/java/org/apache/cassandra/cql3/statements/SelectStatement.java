@@ -1282,7 +1282,7 @@ public class SelectStatement implements CQLStatement, MeasurableForPreparedCache
     /**
      * Orders results when multiple keys are selected (using IN)
      */
-    private void orderResults(ResultSet cqlRows) throws InvalidRequestException
+    private void orderResults(ResultSet cqlRows)
     {
         if (cqlRows.size() == 0 || !needsPostQueryOrdering())
             return;
@@ -1587,7 +1587,10 @@ public class SelectStatement implements CQLStatement, MeasurableForPreparedCache
                         restriction.setBound(def.name, relation.operator(), t);
                         stmt.columnRestrictions[def.position()] = restriction;
                     }
+                    break;
                 }
+                case NEQ:
+                    throw new InvalidRequestException(String.format("Unsupported \"!=\" relation: %s", relation));
             }
         }
 
@@ -1687,6 +1690,8 @@ public class SelectStatement implements CQLStatement, MeasurableForPreparedCache
                         existingRestriction = new SingleColumnRestriction.InWithValues(inValues);
                     }
                     break;
+                case NEQ:
+                    throw new InvalidRequestException(String.format("Unsupported \"!=\" relation on column \"%s\"", def.name));
                 case GT:
                 case GTE:
                 case LT:
@@ -1727,6 +1732,7 @@ public class SelectStatement implements CQLStatement, MeasurableForPreparedCache
                     Term t = newRel.getValue().prepare(keyspace(), receiver);
                     t.collectMarkerSpecification(boundNames);
                     ((SingleColumnRestriction.Contains)existingRestriction).add(t, isKey);
+                    break;
                 }
             }
             return existingRestriction;

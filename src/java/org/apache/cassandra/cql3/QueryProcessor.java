@@ -56,7 +56,6 @@ public class QueryProcessor implements QueryHandler
     private static final Logger logger = LoggerFactory.getLogger(QueryProcessor.class);
     private static final MemoryMeter meter = new MemoryMeter().withGuessing(MemoryMeter.Guess.FALLBACK_BEST);
     private static final long MAX_CACHE_PREPARED_MEMORY = Runtime.getRuntime().maxMemory() / 256;
-    private static final int MAX_CACHE_PREPARED_COUNT = 10000;
 
     private static EntryWeigher<MD5Digest, ParsedStatement.Prepared> cqlMemoryUsageWeigher = new EntryWeigher<MD5Digest, ParsedStatement.Prepared>()
     {
@@ -456,7 +455,7 @@ public class QueryProcessor implements QueryHandler
 
             // The errorCollector has queue up any errors that the lexer and parser may have encountered
             // along the way, if necessary, we turn the last error into exceptions here.
-            errorCollector.throwLastSyntaxError();
+            errorCollector.throwFirstSyntaxError();
 
             return statement;
         }

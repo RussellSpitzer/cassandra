@@ -15,25 +15,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.cql.hooks;
+package org.apache.cassandra.utils;
 
-import org.apache.cassandra.cql.CQLStatement;
-import org.apache.cassandra.thrift.ThriftClientState;
-
-/**
- * Contextual information about the preparation of a CQLStatement.
- * Used by {@link org.apache.cassandra.cql.hooks.PostPreparationHook}
- */
-public class PreparationContext
+public interface SearchIterator<K, V>
 {
-    public final ThriftClientState clientState;
-    public final String queryString;
-    public final CQLStatement statement;
 
-    public PreparationContext(ThriftClientState clientState, String queryString, CQLStatement statement)
-    {
-        this.clientState = clientState;
-        this.queryString = queryString;
-        this.statement = statement;
-    }
+    public boolean hasNext();
+    public V next(K key);
+
 }

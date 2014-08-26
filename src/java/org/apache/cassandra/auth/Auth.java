@@ -288,6 +288,10 @@ public class Auth
         {
         }
 
+        public void onDropFunction(String namespace, String functionName)
+        {
+        }
+
         public void onCreateKeyspace(String ksName)
         {
         }
@@ -300,6 +304,10 @@ public class Auth
         {
         }
 
+        public void onCreateFunction(String namespace, String functionName)
+        {
+        }
+
         public void onUpdateKeyspace(String ksName)
         {
         }
@@ -309,6 +317,10 @@ public class Auth
         }
 
         public void onUpdateUserType(String ksName, String userType)
+        {
+        }
+
+        public void onUpdateFunction(String namespace, String functionName)
         {
         }
     }

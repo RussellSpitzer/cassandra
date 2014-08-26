@@ -15,41 +15,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.cassandra.cql;
+package org.apache.cassandra.cql3;
 
-public class Operation
+import org.junit.Test;
+
+import static junit.framework.Assert.assertFalse;
+
+public class CreateTableTest extends CQLTester
 {
-    public static enum OperationType
-    { PLUS, MINUS }
-
-    public final OperationType type;
-    public final Term a, b;
-
-    // unary operation
-    public Operation(Term a)
+    @Test
+    public void testCQL3PartitionKeyOnlyTable()
     {
-        this.a = a;
-        type = null;
-        b = null;
-    }
-
-    // binary operation
-    public Operation(Term a, OperationType type, Term b)
-    {
-        this.a = a;
-        this.type = type;
-        this.b = b;
-    }
-
-    public boolean isUnary()
-    {
-        return type == null && b == null;
-    }
-
-    public String toString()
-    {
-        return (isUnary())
-                ? String.format("UnaryOperation(%s)", a)
-                : String.format("BinaryOperation(%s, %s, %s)", a, type, b);
+        createTable("CREATE TABLE %s (id text PRIMARY KEY);");
+        assertFalse(currentTableMetadata().isThriftCompatible());
     }
 }
