@@ -22,13 +22,14 @@ package org.apache.cassandra.stress.settings;
 
 import com.google.common.collect.ImmutableList;
 
+import java.io.Serializable;
 import java.lang.Math;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class RetryBackoff
+public class RetryBackoff implements Serializable
 {
     private enum BackoffStrategy
     {
